@@ -87,5 +87,8 @@ for e in range(epoch):
 
 
 
+plt.figure(0)
+plt.plot([i for i in range(epoch)], totLoss)
+
 
 
