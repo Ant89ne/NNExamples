@@ -1,7 +1,7 @@
 from os import path
 import numpy as np
 import torch 
-from torch import nn
+import torch.nn as nn
 from torch.utils.data import DataLoader, random_split, Dataset, ConcatDataset
 import matplotlib.pyplot as plt
 import time
@@ -11,10 +11,36 @@ import csv
 
 
 class myNet(nn.Module):
-    def __init__(self):
-        pass
+    def __init__(self, nbInput, nbLayer):
+        super(myNet, self).__init__()
+        
+        hid = 5
+
+        self.nbInput = nbInput
+
+        self.layers = []
+        self.layers.append(nn.Linear(nbInput, nbInput*hid))
+        self.layers.append(nn.BatchNorm1d(nbInput*hid))
+        self.layers.append(nn.ReLU())
+
+        for l in range(nbLayer) :
+            self.layers.append(nn.Linear(nbInput*hid, nbInput*hid))
+            self.layers.append(nn.BatchNorm1d(nbInput*hid))
+            self.layers.append(nn.ReLU())
+
+        self.layers.append(nn.Linear(nbInput*hid, nbInput))
+        self.layers.append(nn.BatchNorm1d(nbInput))
+        self.layers.append(nn.ReLU())
+
+        self.layers.append(nn.Linear(nbInput, 1))
+
+        self.layers = nn.Sequential(*self.layers)
+        
     def forward(self, x):
-        pass
+        
+        ret = self.layers(x)
+
+        return ret
 
 
 class myDataset(Dataset):
@@ -30,43 +56,56 @@ class myDataset(Dataset):
                     self.data.append(line)
         
         self.data = np.array(self.data).astype("int16")
-        print(self.data)
+        self.mean = np.mean(self.data)
+        self.std = np.std(self.data)
+        self.data = (self.data - self.mean)/self.std
 
     def __len__(self):          #Function TO BE filled
         #Return the length of the dataset
         s = self.data.shape
-        print(s)
         return s[0] * (s[1]-self.nbinput)
         
     def __getitem__(self, index): #Function TO BE filled
         s = self.data.shape
         i = index//(s[1]-self.nbinput)
         j = index - i*(s[1]-self.nbinput)
-        print(j,i)
         d = self.data[i][j:j+self.nbinput]
         l = self.data[i][j+self.nbinput]
 
-        return d,l
+        return torch.Tensor(d),torch.Tensor(np.array([l]))
 
         
 #Initialization
-mydata = myDataset("inj1.csv", 10)        #Dataset
+nbInput = 15
+nbLayers = 5
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-model = myNet()             #Neural Net
+mydata = myDataset("inj1.csv", nbInput)        #Dataset
 
-mydataloader = DataLoader(mydata, 8, shuffle = True)    #Dataloader
+model = myNet(nbInput, nbLayers)             #Neural Net
+model.to(device)
+x,l = mydata[0]
 
-epoch = 10      #Nb epoch to run
+mydataloader = DataLoader(mydata, 64, shuffle = True)    #Dataloader
+
+epoch = 1000      #Nb epoch to run
 
 myLoss = nn.MSELoss()   #Loss function 
 
-optimizer = optim.Adam(model.parameters(), lr = 0.01)    #Optimization method
+print(model)
+
+optimizer = optim.Adam(model.parameters(), lr = 0.0001)    #Optimization method
 
 totLoss = []        #List of losses for final visualization
+finLoss = []
 
 for e in range(epoch):
+    print("Epoch ", e+1, "/", epoch)
+    
     for data, label in mydataloader:
-        
+        data = data.to(device)
+        label = label.to(device)
+
         #Initialization of the gradient error
         optimizer.zero_grad()
 
@@ -85,10 +124,15 @@ for e in range(epoch):
         #Update of the weights and biaises of the net
         optimizer.step()
 
+    finLoss.append(np.mean(totLoss))
+    print("Training Loss ", finLoss[-1])
+    totLoss = []
 
 
 plt.figure(0)
-plt.plot([i for i in range(epoch)], totLoss)
+plt.plot([i for i in range(epoch)], finLoss)
+plt.savefig("loss.png")
+plt.show()
 
 
 
