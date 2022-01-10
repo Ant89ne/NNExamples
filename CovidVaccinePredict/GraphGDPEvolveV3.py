@@ -21,7 +21,8 @@ def getLabels(listValues, nbSteps):
     #Get the order of magnitude of the increment (for rounding later)
     magC = int(np.floor(np.log10(incrementC)))
     #Round the delta value
-    incrementC = np.round(incrementC, -magC)
+    incrementC = int(np.round(incrementC, -magC))
+    print(nbmaxC, magC, incrementC)
     #Create the list of labels with the correct delta
     labelsyc = [k for k in range(0, np.round(nbmaxC, -magC) + int(incrementC) +1,  int(incrementC))]
 
@@ -89,9 +90,6 @@ def visualizeData(listValues, first, last, name, xlabels):
     labs = getLabels(yvals, nbSteps)
     strlabs = toStr(labs)
 
-    print(labs)
-    print(strlabs)
-
     #Visualization
     plt.figure(0, figsize=(20,10))
     plt.clf()                                                               #Clear the display
@@ -113,7 +111,7 @@ def visualizeData(listValues, first, last, name, xlabels):
 
 
 #Open the data file
-f = open("GDP.csv")
+f = open("TrueGDP.csv")
 fbis = open("world_covid_data.csv")
 #Read the file as a CSV
 csvreader = csv.reader(f, delimiter = ',')
@@ -168,7 +166,7 @@ for line in csvreader :
     for i,d in enumerate(data) : 
         try :                       #Try to convert the data to int value
             d = d.replace(',', '.') #Switch ',' to '.' to be able to consider data as float
-            data[i] = float(d)*10e6 #Convertion
+            data[i] = float(d) #Convertion
             if first == -1 :        #If it is the first effective data : set the index
                 first = i
             last = i                #Set the index of the last effective data
