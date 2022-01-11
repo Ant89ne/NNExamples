@@ -22,7 +22,7 @@ def getLabels(listValues, nbSteps):
     magC = int(np.floor(np.log10(incrementC)))
     #Round the delta value
     incrementC = int(np.round(incrementC, -magC))
-    print(nbmaxC, magC, incrementC)
+
     #Create the list of labels with the correct delta
     labelsyc = [k for k in range(0, np.round(nbmaxC, -magC) + int(incrementC) +1,  int(incrementC))]
 
@@ -159,7 +159,7 @@ for line in csvreader :
         region = compareLine[indexRegion]
     else :
         region = "Other"
-    print(region, checkName)
+
     data = line[2:]                 #Extract the data
     first, last = -1,-1             #First and Last not None values
     #Look for effective data

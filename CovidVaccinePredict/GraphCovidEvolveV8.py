@@ -119,7 +119,7 @@ def visualization(listCases, listDeaths, countryName) :
     plt.title("Cumulative Deaths per months in " + cName)                       #Title
 
     plt.savefig("VisFold8/" + countryName + "Graph.png")                        #Save the figure
-    plt.show()                                                                  #Show the figure to the user (/!\ should be commented for faster processing)
+    # plt.show()                                                                  #Show the figure to the user (/!\ should be commented for faster processing)
 
 
 def visualizationAll(listCases, listDeaths, regionName) :
