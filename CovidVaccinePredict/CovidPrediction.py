@@ -21,16 +21,17 @@ def getDailyData(csvreader):
             indexCountry = i
 
     line = next(csvreader)
-    countryData = [line[indexCases]]
+    countryData = [int(line[indexCases])]
     country = line[indexCountry]
 
     for line in csvreader : 
         c = line[indexCountry]
         if country == c :
-            countryData.append(line[indexCases])
+            countryData.append(int(line[indexCases]))
         else :
-            dataCases.append(countryData)
-            countryData = [line[indexCases]]
+            if np.sum(np.array(countryData)) != 0 :
+                dataCases.append(countryData)
+            countryData = [int(line[indexCases])]
             country = c
 
     dataCases.append(countryData)
@@ -63,7 +64,8 @@ def getMonthlyData(csvreader):
         elif country == c and month == m:
             countryData[-1] += int(line[indexCases])
         elif country != c :
-            dataCases.append(countryData)
+            if np.sum(np.array(countryData)) != 0 :
+                dataCases.append(countryData)
             countryData = [int(line[indexCases])]
             country = c
             month = m
@@ -124,9 +126,12 @@ class myDataset(Dataset):
                 self.dataCases = getMonthlyData(csvreader)
 
         self.dataCases = np.array(self.dataCases).astype("int64")
-        # self.mean = np.mean(self.data)
-        # self.std = np.std(self.data)
-        # self.data = (self.data - self.mean)/self.std
+        self.mean = np.mean(self.dataCases, axis = 1)
+        self.std = np.std(self.dataCases, axis = 1)
+
+        s = self.dataCases.shape
+        for i in range(s[0]):
+            self.dataCases[i,:] = (self.dataCases[i,:] - self.mean[i])/self.std[i]
 
     def __len__(self):          #Function TO BE filled
         #Return the length of the dataset
@@ -146,13 +151,12 @@ class myDataset(Dataset):
 #Initialization
 nbInput = 15
 nbLayers = 5
-temporality = "monthly"
+temporality = "daily"
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 mydata = myDataset("world_covid_data.csv", nbInput, temporality)        #Dataset
 
 print(mydata[len(mydata)-1])
-exit()
 
 model = myNet(nbInput, nbLayers)             #Neural Net
 model.to(device)
@@ -160,7 +164,7 @@ x,l = mydata[0]
 
 mydataloader = DataLoader(mydata, 64, shuffle = True)    #Dataloader
 
-epoch = 1000      #Nb epoch to run
+epoch = 100      #Nb epoch to run
 
 myLoss = nn.MSELoss()   #Loss function 
 
