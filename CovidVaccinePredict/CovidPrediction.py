@@ -174,10 +174,11 @@ optimizer = optim.Adam(model.parameters(), lr = 0.0001)    #Optimization method
 
 totLoss = []        #List of losses for final visualization
 finLoss = []
+validLoss = []
 
 for e in range(epoch):
     print("Epoch ", e+1, "/", epoch)
-    
+    model.train()
     for data, label in mydataloader:
         data = data.to(device)
         label = label.to(device)
@@ -203,6 +204,10 @@ for e in range(epoch):
     finLoss.append(np.mean(totLoss))
     print("Training Loss ", finLoss[-1])
     totLoss = []
+
+    model.eval()
+    # validLoss.append(validLoop(validDataloader, model))
+
 
 
 plt.figure(0)

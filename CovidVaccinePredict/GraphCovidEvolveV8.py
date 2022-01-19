@@ -178,7 +178,7 @@ def visualizationAll(listCases, listDeaths, regionName) :
 ##########################################################################################
 
 #Open data file
-f = open("world_covid_data.csv")
+f = open("data_All.csv")
 #Read as a CSV file
 csvreader = csv.reader(f, delimiter = ',')
 #Extract the header
@@ -198,9 +198,12 @@ for i, text in enumerate(header) :
 
 # Extract all regions names
 L = []
+dates = []
 for line in csvreader :
     if line[indexRegion] not in L :
         L.append(line[indexRegion])
+    if line[indexDate].split("-")[1] not in dates :
+        dates.append(line[indexDate].split("-")[1])
 f.close()
 
 #Initialization
@@ -217,16 +220,24 @@ DeathsRegions = np.zeros((6,24))
 
 
 #Reopen the file as a csv and extract the header
-f = open("world_covid_data.csv")
+f = open("data_All.csv")
+fw = open("Usefull_Data.csv", 'w+')
 csvreader = csv.reader(f, delimiter = ',')
+csvwriter = csv.writer(fw, delimiter = ',')
+
+wheader = ["Country", "DataType"] + [d + "-20" for d in dates] + [d + "-21" for d in dates]
+csvwriter.writerow(wheader)
+
 header = next(csvreader)
 
 #Beginning of the routine
 for line in csvreader :                             #Read each line from the csv file
     date = (line[indexDate].split('-'))             #Extract the date
-
+    
     #Check if the country is still the same
-    if memCountry == line[indexCountry]:       
+    if memCountry == line[indexCountry]:  
+        if date[0] == "2022":
+            continue     
         #Check if the month is still the same
         if memDate == date[1]:                      
             monthCases += int(line[indexCases])     #Sum the cases
@@ -244,7 +255,11 @@ for line in csvreader :                             #Read each line from the csv
     else :                                          
         listCases.append(monthCases)    #Add values to the list of cases of the previous country
         listDeaths.append(monthDeaths)  #Add values to the list of deaths of the previous country
-        
+        print(listCases)
+        toSaveC = [memCountry, "Cases"] + [str(i) for i in listCases]
+        toSaveD = [memCountry, "Death"] + [str(i) for i in listDeaths]       
+        csvwriter.writerow(toSaveC)
+        csvwriter.writerow(toSaveD)
         #Visualize the data for the previous country
         visualization(listCases, listDeaths, "Countries/" + memCountry)
 
@@ -266,6 +281,16 @@ for line in csvreader :                             #Read each line from the csv
         memDate = '01'
         listCases = []
         listDeaths = []
+
+listCases.append(monthCases)    #Add values to the list of cases of the previous country
+listDeaths.append(monthDeaths)  #Add values to the list of deaths of the previous country
+
+toSaveC = [memCountry, "Cases"] + [str(i) for i in listCases]
+toSaveD = [memCountry, "Death"] + [str(i) for i in listDeaths]       
+csvwriter.writerow(toSaveC)
+csvwriter.writerow(toSaveD)
+#Visualize the data for the previous country
+visualization(listCases, listDeaths, "Countries/" + memCountry)
 
 
 #Visualization of each region independently
