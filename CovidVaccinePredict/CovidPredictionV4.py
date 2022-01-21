@@ -246,7 +246,7 @@ def cloudVis(data, preds, meanVals, c, nbInput):
         plt.plot([i for i in range(len(data))], data, '-r')
         plt.plot([i for i in range(nbInput, nbInput+len(meanVals))], meanVals, '-b')
         plt.title("Predictions for 5 weeks for " + c)
-        plt.legend(["Ground Truth", "Mean Predictions", "Five days predictions"])
+        plt.legend(["Ground Truth", "Mean Predictions", "Five weeks predictions"])
         plt.axvline(nbInput,color = 'k', linestyle = '--')
         plt.axvline(0,color='k')
         plt.axvline(len(data)/2, color = 'k')
@@ -256,6 +256,8 @@ def cloudVis(data, preds, meanVals, c, nbInput):
         plt.text(3*len(data)/4-2,np.min(data) , "2021")
         plt.text(len(data)+ 2,np.min(data) , "2022")
         plt.xticks([i for i in range(0,len(data)+10,5)], [i for i in range(0,len(data)+10,5)])
+        plt.xlabel("Week number starting in 01-2020")
+        plt.ylabel("Number of Cases")
         plt.show()
 
 def fullTestMultipleLoop(dataset, model, nbInput, nbOutput, device = "cpu"):

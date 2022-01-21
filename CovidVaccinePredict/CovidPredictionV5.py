@@ -10,6 +10,70 @@ import torch.optim as optim
 import random
 import csv
 
+def getMetrics(dataloader, model, device = "cuda"):
+    model.eval()
+    with torch.no_grad():
+        listae = [[] for i in range(5)]
+        listse = [[] for i in range(5)]
+        for d, l, w in dataloader :
+            d = d.to(device)
+            l = l.to(device)
+            pred = model(d)
+
+            ae = torch.absolute(pred-l).cpu()
+            se = torch.square(pred-l).cpu()
+
+            for k in range(d.shape[0]):
+                for i in range(5):
+                    listae[i].append(ae[k,0,i].item())
+                    listse[i].append(se[k,0,i].item())
+
+        listae = np.array(listae)
+        listse = np.array(listse)
+
+        meanValae = np.mean(listae, axis = 1)
+        stdValae = np.std(listae, axis = 1)
+        meanValse = np.mean(listse, axis = 1)
+        stdValse = np.std(listse, axis = 1)
+
+        return meanValae, stdValae, np.sqrt(meanValse), np.sqrt(stdValse)
+
+def writeTable(fullDataset, model, metrics, percentages, device = "cuda"):
+    model.eval()
+    with torch.no_grad():
+        f = open("2022preds.csv", "w+")
+        csvwriter = csv.writer(f, delimiter = ',')
+        nbOutput = fullDataset.nboutput
+        metricsHeader = []
+        for i in range(nbOutput):
+            metricsHeader = metricsHeader + ["MAE_week_" + str(i+1), "stdAE_week_"+str(i+1), "RMSE_week_"+str(i+1), "stdRMSE_week_"+str(i+1)]
+        csvwriter.writerow(["Country"] + ["Pred_week_" + str(i+1) for i in range(nbOutput)] +  metricsHeader)
+        s = fullDataset.dataCases.shape
+        for c in range(s[0]):
+
+            flag = (c/s[0] > percentages[0]) + (c/s[0] > (percentages[0] + percentages[1]))
+
+            data = fullDataset.dataCases[c,-fullDataset.nbinput:]
+            pred = model(torch.reshape(torch.Tensor(np.array(data)).to(device), (1, fullDataset.nbinput)))
+
+
+            mu = fullDataset.mean[c]
+            sig = fullDataset.std[c]
+            met = np.array(metrics[flag]) * sig + mu 
+            pred = pred.cpu().numpy()[0,0,:] * sig + mu
+
+            metline = []
+            for i in range(nbOutput):
+                metline = metline + [str(int(m)) for m in met[:,i]]
+
+            line = [fullDataset.country[c]] + [str(int(p)) for p in pred] + metline
+
+            csvwriter.writerow(line)
+        
+
+            
+
+
 def getDailyData(csvreader):
     dataCases = []
     countries = []
@@ -140,7 +204,6 @@ def validLoop(dataloader, model, myLoss, device = "cpu"):
         #Save the loss for later visualization
         totLoss += loss.item()
         b += data.shape[0]
-    
     return totLoss/b
 
 def testVis(GT, wPred, fPred, wLoss, fLoss, country, cstd, cmean, skip, nbInput):
@@ -234,30 +297,56 @@ def testMultipleLoop(dataloader, model, nbInput, device = "cpu"):
 
         SampleVisMultiple(x, pred, l, loss)
 
-def cloudVis(data, preds, c, nbInput):
+def cloudVis(data, preds, meanVals, c, nbInput):
     with torch.no_grad():
         plt.figure(0, figsize=(20,10))
         plt.clf()
+        plt.plot([i for i in range(len(data))], data, '-r')
+        plt.plot([i for i in range(nbInput, nbInput+len(meanVals))], meanVals, '-b')
         for i,p in enumerate(preds) :
             p = p[0,0,:].cpu()
-            plt.plot([k+i+nbInput for k in range(len(p))], p, '*')
+            plt.plot([k+i+nbInput for k in range(len(p))], p, '*', alpha = 0.3)
         
         plt.plot([i for i in range(len(data))], data, '-r')
-        plt.title("Cases per week for " + c)
+        plt.plot([i for i in range(nbInput, nbInput+len(meanVals))], meanVals, '-b')
+        plt.title("Predictions for 5 weeks for " + c)
+        plt.legend(["Ground Truth", "Mean Predictions", "Five weeks predictions"])
+        plt.axvline(nbInput,color = 'k', linestyle = '--')
+        plt.axvline(0,color='k')
+        plt.axvline(len(data)/2, color = 'k')
+        plt.axvline(len(data)-1, color = 'k')
+        plt.text(2.5,1/2*np.max(data), "Input Data")
+        plt.text(len(data)/4-2,np.min(data) , "2020")
+        plt.text(3*len(data)/4-2,np.min(data) , "2021")
+        plt.text(len(data)+ 2,np.min(data) , "2022")
+        plt.xticks([i for i in range(0,len(data)+10,5)], [i for i in range(0,len(data)+10,5)])
+        plt.xlabel("Week number starting in 01-2020")
+        plt.ylabel("Number of Cases")
         plt.show()
 
 def fullTestMultipleLoop(dataset, model, nbInput, nbOutput, device = "cpu"):
     model.eval()
-    s = dataset.dataCases.shape
-    for d in range(s[0]):
-        data = dataset.dataCases[d]
-        countryPreds = []
-        for k in range(len(data) - nbInput) :
-            inp = np.concatenate((data[k:k+nbInput], np.array([k/len(data)])))
-            inp = torch.reshape(torch.Tensor(inp), (1, len(inp))).to(device)
-            countryPreds.append(model(inp))                
-        
-        cloudVis(data, countryPreds, dataset.country[d], nbInput)
+    with torch.no_grad():            
+
+        s = dataset.dataCases.shape
+        for d in range(s[0]):
+            data = dataset.dataCases[d]
+            countryPreds = []
+            meanPredict = np.zeros((1, len(data)-nbInput+nbOutput-1))
+            nb = np.zeros((1, len(data)-nbInput+nbOutput-1))
+            for k in range(len(data) - nbInput) :
+                inp = data[k:k+nbInput]
+                inp = torch.reshape(torch.Tensor(inp), (1, len(inp))).to(device)
+                pred = model(inp)
+                countryPreds.append(pred)   
+                meanPredict[0,k:k+nbOutput] += pred.cpu().numpy()[0,0,:]
+                nb[0,k:k+nbOutput] += 1
+
+            print(meanPredict)
+            meanPredict /= nb
+            print(meanPredict * dataset.std[d] + dataset.mean[d])
+
+            cloudVis(data * dataset.std[d] + dataset.mean[d], np.array(countryPreds) * dataset.std[d] + dataset.mean[d], meanPredict[0,:] * dataset.std[d] + dataset.mean[d], dataset.country[d], nbInput)
 
 
 class myNet(nn.Module):
@@ -529,9 +618,7 @@ class myDatasetIter(Dataset):
 
         w = np.sum(((d-self.minis[i])/self.maxis[i]) * (d >= (self.minis[i] + (self.maxis[i] - self.minis[i])*0.3) ), axis = -1)
         
-        d = torch.cat((torch.Tensor(d),torch.Tensor(np.array([float(i)/float(s[0])]))))
-
-        return d,torch.Tensor(np.array([l])), torch.Tensor(np.array([w]))
+        return torch.Tensor(d),torch.Tensor(np.array([l])), torch.Tensor(np.array([w]))
 
     def show(self):
         s = self.dataCases.shape
@@ -557,12 +644,14 @@ mydataTrain = myDatasetIter("world_covid_data.csv", nbInput, nbOutput, temporali
 mydataEval = myDatasetIter("world_covid_data.csv", nbInput, nbOutput, temporality, percentages, 1)        #Dataset
 mydataTest = myDatasetIter("world_covid_data.csv", nbInput, nbOutput, temporality, percentages, 2)        #Dataset
 brazilSet = myDatasetIter("brazilData.csv", nbInput, nbOutput, temporality, [1], 0)
+
+fullDataSet = myDatasetIter("world_covid_data.csv", nbInput, nbOutput, temporality, [1], 0)
 print(len(mydataTrain), len(mydataTest), len(mydataEval))
 
 
 # model = myNet(nbInput, nbLayers)             #Neural Net
 # model = iterCNNNet(nbInput, nbOutput)             #Neural Net
-model = myCNNNetMultiple(nbInput+1, nbOutput)             #Neural Net
+model = myCNNNetMultiple(nbInput, nbOutput)             #Neural Net
 
 model.to(device)
 
@@ -570,9 +659,16 @@ mydataloaderTrain = DataLoader(mydataTrain, 128, shuffle = True)    #Dataloader
 mydataloaderEval = DataLoader(mydataEval, 64, shuffle = False)    #Dataloader
 mydataloadertest = DataLoader(mydataTest, 1, shuffle = False)    #Dataloader
 
-# model = torch.load("myModelMultiple.pt")
+model = torch.load("myModelMultiple.pt")
+allMetrics = []
+allMetrics.append(getMetrics(mydataloaderTrain, model))
+allMetrics.append(getMetrics(mydataloaderEval, model))
+allMetrics.append(getMetrics(mydataloadertest, model))
+
+writeTable(fullDataSet, model, allMetrics, percentages)
+
 # fullTestMultipleLoop(brazilSet, model, nbInput, nbOutput, device)
-# exit()
+exit()
 epoch = 1000      #Nb epoch to run
 
 # myLoss = nn.MSELoss(reduction='sum')   #Loss function 
@@ -592,6 +688,7 @@ for e in range(epoch):
         data = data.to(device)
         label = label.to(device)
         w = w.to(device)
+
         #Initialization of the gradient error
         optimizer.zero_grad()
         
@@ -616,6 +713,7 @@ for e in range(epoch):
     # if epoch == 1000 :
     #     optimizer = optim.Adam(model.parameters(), lr = 0.000005)    #Optimization method
 
+
     finLoss.append(totLoss/b)
     print("Training Loss ", finLoss[-1])
     totLoss = 0
@@ -639,7 +737,7 @@ plt.legend(["Training Loss", "Evaluation Loss"])
 plt.savefig("loss.png")
 plt.show()
 
-torch.save(model, "myModelMultipleWithTime.pt")
+torch.save(model, "myModelMultipleBis.pt")
 
 
 
