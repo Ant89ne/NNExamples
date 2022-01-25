@@ -64,6 +64,23 @@ def toStr(listValues):
     
     return strlistValues
 
+def getPop(country):
+    popFile = "population_data.csv"
+    f = open(popFile)
+    csvFile = csv.reader(f, delimiter = ',')
+
+    header = next(csvFile)
+
+    for line in csvFile:
+        if line[0] in country or country in line[0] :
+            # print(country, line)
+            return float(line[1]) * 1e3
+        elif line[0] > country :
+            break
+
+    print(country + " Population not found")
+    return  1e6
+
 def getMetrics(dataloader, model, device = "cuda"):
     """
     Function used to calculate the mean and standard deviation of the Absolute Error and the Sqared error
@@ -141,13 +158,15 @@ def writeTable(fullDataset, model, metrics, percentages, device = "cuda"):
         metricsHeader = []
         for i in range(nbOutput):
             metricsHeader = metricsHeader + ["MAE_week_" + str(i+1), "stdAE_week_"+str(i+1), "RMSE_week_"+str(i+1), "stdRMSE_week_"+str(i+1)]
-        csvwriter.writerow(["Country"] + ["Pred_week_" + str(i+1) for i in range(nbOutput)] +  metricsHeader)
+        csvwriter.writerow(["Country", "Unit"] + ["Pred_week_" + str(i+1) for i in range(nbOutput)] +  metricsHeader)
 
         #Shape of the dataset
         s = fullDataset.dataCases.shape
 
         #Write line
         for c in range(s[0]):
+            nbPop = getPop(fullDataset.country[c])/1e6
+
             #Flag used to determine which type of data the country belongs to (train, eval or test)
             flag = (c/s[0] > percentages[0]) + (c/s[0] > (percentages[0] + percentages[1]))
 
@@ -169,8 +188,13 @@ def writeTable(fullDataset, model, metrics, percentages, device = "cuda"):
             for i in range(nbOutput):
                 metline = metline + [str(int(m)) for m in met[:,i]]
 
+            if nbPop != 1 :
+                unit = "per million inhabitant"
+            else : 
+                unit = ""
+
             #Prepare the line to be written
-            line = [fullDataset.country[c]] + [str(int(p)) for p in pred] + metline
+            line = [fullDataset.country[c], unit] + [str(int(p/nbPop)) for p in pred] + metline
             
             #Write the line
             csvwriter.writerow(line)
@@ -393,6 +417,10 @@ def cloudVis(data, preds, meanVals, c, nbInput, tit=""):
     @input nbInput :    Number of input of the network
     @input tit :        Whether the data are cumulated or not
     """
+    nbPop = getPop(c) / 1e6
+    data /= nbPop
+    meanVals/= nbPop
+    
     #Disable gradient calculation
     with torch.no_grad():
         plt.figure(0, figsize=(20,10))                                                      #Create new figure
@@ -401,6 +429,7 @@ def cloudVis(data, preds, meanVals, c, nbInput, tit=""):
         plt.plot([i for i in range(nbInput, nbInput+len(meanVals))], meanVals, '-b')        #Plot mean values first time (for legend issues)
         
         for i,p in enumerate(preds) :
+            p /= nbPop
             plt.plot([k+i+nbInput for k in range(len(p))], p, '*', alpha = 0.3)             #Plot predictions using stars
         
         plt.plot([i for i in range(len(data))], data, '-r')                                 #Plot ground truth (to be on the foreground)
@@ -419,8 +448,11 @@ def cloudVis(data, preds, meanVals, c, nbInput, tit=""):
         ylab = getLabels(data, 10)  #Get ylabels
         plt.yticks(ylab, toStr(ylab), fontsize=12)                                          #y-axis values name
         plt.xlabel("Week number starting in 01-2020", fontsize = 15)                        #x-axis name
-        plt.ylabel("Number of Deaths", fontsize = 15)                                       #y-axis name
-
+        if nbPop != 1 :
+            plt.ylabel("Number of Deaths per million inhabitant", fontsize = 15)                                        #y-axis name
+        else : 
+            plt.ylabel("Number of Deaths", fontsize = 15)                                        #y-axis name
+        
         #Check if the saving directory exists
         checkDirs("RNNResDeaths")
         #Save the figure
